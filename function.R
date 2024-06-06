@@ -7,7 +7,7 @@ cat('En caso de presentar algún inconveniente, por favor', '\n')
 cat('repórtelo a <jborja@uninorte.edu.co>', '\n', '\n')
 cat('Última modificación: Junio 05, 2024', '\n', '\n')
 
-validar_supuestos <- function(model, influencial_plot = F) {
+validar_supuestos <- function(model, plot = F) {
   s <- summary(model)
   
   # Validación
