@@ -315,7 +315,7 @@ source("https://raw.githubusercontent.com/unfresh25/Challenge--2/master/function
 Luego, procederemos a evaluar el modelo (`fit`) utilizando la función creada, en este caso utilizamos `plot = T` para ver el gráfico de la **distancia de cooks**. Entonces,
 
 ``` {r}
-validar_supuestos(fit, influencial_plot = T)
+validar_supuestos(fit, plot = T)
 ```
 
 ### Predicción 
