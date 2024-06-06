@@ -76,7 +76,7 @@ validar_supuestos <- function(model, plot = F) {
   )
   
   
-  message("1. Validación")
+  message("2. Validación")
   out_v <- c(
     "Significancia Global" = psg,
     "Significancia Marginal" = psm,
@@ -90,16 +90,16 @@ validar_supuestos <- function(model, plot = F) {
     "Homocedasticidad" = hom
   )
   
-  message("2. Verificación de residuales")
+  message("3. Verificación de residuales")
   print(out_r)
   
-  message("3. Multicolinealidad")
+  message("4. Multicolinealidad")
   print(c("Multicolinealidad" = mul))
   if(!(mul == "Cumple")) {
     print(c(vif(model)))
   }
   
-  message("4. Outliers/Influenciales")
+  message("5. Outliers/Influenciales")
   out_oi <- c(
     "Outliers" = nout,
     "Influenciales" = inf
