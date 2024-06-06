@@ -49,7 +49,7 @@ h3 {
   background-color: #111;
 }
 
-p > code, h2 > code, h3 > code {
+p > code, h2 > code, h3 > code, li > code {
   background-color: #212121 !important;
   color: #dd9ec2 !important;
   border: 1px solid #373737 !important;
