@@ -1,4 +1,13 @@
-validar_supuestos <- function(model, plot = F) {
+
+cat('Esta función fue creada por Jorge Borja', '\n')
+cat('<https://jorgeborja-portfolio.vercel.app/> para la validación', '\n')
+cat('de la construcción de un modelo de regresión lineal múltiple.', '\n', '\n')
+
+cat('En caso de presentar algún inconveniente, por favor', '\n')
+cat('repórtelo a <jborja@uninorte.edu.co>', '\n', '\n')
+cat('Última modificación: Junio 05, 2024', '\n', '\n')
+
+validar_supuestos <- function(model, influencial_plot = F) {
   s <- summary(model)
   
   # Validación
@@ -67,7 +76,7 @@ validar_supuestos <- function(model, plot = F) {
   )
   
   
-  message("Validación")
+  message("1. Validación")
   out_v <- c(
     "Significancia Global" = psg,
     "Significancia Marginal" = psm,
@@ -81,22 +90,22 @@ validar_supuestos <- function(model, plot = F) {
     "Homocedasticidad" = hom
   )
   
-  message("Verificación de residuales")
+  message("2. Verificación de residuales")
   print(out_r)
   
-  message("")
+  message("3. Multicolinealidad")
   print(c("Multicolinealidad" = mul))
   if(!(mul == "Cumple")) {
     print(c(vif(model)))
   }
   
-  message("Outliers/Influenciales")
+  message("4. Outliers/Influenciales")
   out_oi <- c(
     "Outliers" = nout,
     "Influenciales" = inf
   )
   print(out_oi)
-  if(plot == T) {
+  if(influencial_plot == T) {
     plot(model, which = 4, las = 1)
   }
 }
