@@ -1,0 +1,487 @@
+---
+title: "Analítica Avanzada de Datos"
+subtitle: "Challenge #2"
+author:
+  - name: Jorge Borja Serrano
+    url: https://jorgeborja-portfolio.vercel.app/
+    email: jborjaa@uninorte.edu.co
+    affiliation: 
+      - name: Universidad del Norte, Barranquilla
+date: "`r Sys.Date()`"
+lang: es
+self-contained: true
+fontsize: 14pt
+code-fold: show
+number-sections: false
+format: html
+toc: true
+toc-title: ""
+toc-depth: 3
+theme: cyborg
+css: style.css
+smooth-scroll: true
+df-print: paged
+include-in-header:
+  - text: |
+      <link rel="apple-touch-icon" sizes="180x180" href="Icon/apple-touch-icon.png">
+      <link rel="icon" type="image/png" sizes="16x16" href="Icon/favicon-16x16.png">
+      <link rel="manifest" href="Icon/site.webmanifest">
+      <link rel="mask-icon" href="Icon/safari-pinned-tab.svg" color="#5bbad5">
+      <meta name="msapplication-TileColor" content="#da532c">
+      <meta name="theme-color" content="#ffffff">
+---
+
+```{r setup, include=FALSE, message=FALSE}
+knitr::opts_chunk$set(eval = TRUE)
+options(warn = -1)
+
+## disponibilidad de paquetes
+if(!require(car)) install.packages("car", dependencies = TRUE)
+require(car)
+
+if(!require(IsingSampler)) install.packages("IsingSampler", dependencies = TRUE)
+require("IsingSampler")
+
+if(!require(qgraph)) install.packages("qgraph", dependencies = TRUE)
+require("qgraph")
+
+if(!require(mctest)) install.packages("mctest", dependencies = TRUE)
+require("mctest")
+
+if(!require(GGally)) install.packages("GGally")
+require("GGally")
+
+if(!require('plotly')) install.packages('plotly')
+require(plotly)
+```
+
+
+## Introducción
+
+En esta práctica ajustaremos y validaremos un modelo de RLM, y finalmente realizaremos predicción. 
+
+
+## Contexto Analítico
+
+The Tire Company (TTC) fabrica compuestos para llantas de F1. En la actualidad, TTC desarrolla un nuevo compuesto para la temporada 2023, con miras a superar _nuevamente_ a su más desafiante [competidor](https://www.formula1.com/content/dam/fom-website/sutton/2019/Testing/BarcelonaTestOne/DayFour/1017348654-SUT-20190221-MS1_9808-16x9.JPG.transform/9col/image.JPG). 
+
+En el proceso de fabricación existen 3 compuestos $x_1, x_2$ y $x_3$ que conforman cada llanta. De acuerdo con las regulaciones, una llanta de F1 debe pesar _no más_ de 13 kilogramos sin incluir el rin y los sensores. Además, se sabe que el costo por cada gramo de material $j$, en dólares, es $c_j = \sqrt{j}$, $j=1,2,3$. TTC está convencida de que modificando la composición de la llanta es posible alcanzar un mejor rendimiento (medido en kilómetros recorridos), de tal forma que no es necesario realizar tantas paradas en _pits_ durante una competencia regular. En la fase de experimentación, el equipo de analítica, donde **usted** trabaja, encontró que la formulación actual permite recorrer $26 \pm 7$ kilómetros con un _set_ de llantas. Se sabe que, en libras, $x_1\in(5, 12)$, $x_2\in(3, 20)$ y $x_3\in(1, 6)$. Por lo tanto, el _resto_ del peso de la llanta debe completarse con caucho _sin procesar_.
+
+El día de ayer, **usted**  fue asignado a este proyecto con miras a optimizar la composición de las llantas en TTC, de tal manera que el número de kilómetros recorridos por cada _set_ de llantas sea considerablemente _mayor_ que en la actualidad. 
+
+
+### Lectura de Datos
+
+Para leer los datos hacemos:
+
+```{r, echo=FALSE}
+## lectura de datos
+d <- read.table('https://www.dropbox.com/s/b0ijd120l4pjxb8/llantas.txt?dl=1', header = TRUE)
+```
+
+Las primeras 6 filas de la base de datos `d` son
+
+```{r}
+## primeras 6 líneas
+head(d)
+```
+
+
+### Análisis exploratorio
+
+Analicemos inicialmente la correlación entre las variables disponibles:
+
+
+```{r, fig.align='center', fig.width=6, fig.height=5}
+## matriz de correlación
+par(mfrow = c(1,1), mar = c(.1, .1, .1, .1))
+qgraph(cor(d), graph = "cor", layout = "spring", 
+       sampleSize = nrow(d), 
+       legend.cex = 1, alpha = 0.05)
+```
+
+Numéricamente, la matriz de correlación es
+
+
+```{r message=FALSE, fig.align='center', fig.width=6, fig.height=6}
+## matriz de correlación
+cor(d)
+```
+
+Estos resultados indican que la correlación entre $y$ y $x_1$ es 0.2912, entre $y$ y $x_2$ es -0.762, y entre $y$ y $x_3$ es 0.288. En cuanto a la correlaciones entre las variables _independientes_, podemos concluir que estas son pequeñas, lo cual sugiere que, efectivamente, $x_1, x_2$ y $x_3$ son independientes.
+
+También podemos representar las correlaciones y la distribución de cada variable en un gráfico de dispersión/correlación:
+
+```{r fig.align='center', message=FALSE}
+## gráfico de dispersión/correlación
+ggpairs(d) + theme_minimal()
+```
+
+El gráfico 3D entre $x_1$, $x_2$ y $y$ sería:
+
+```{r, fig.align='center', message=FALSE}
+fig <- plot_ly(d,
+        x = ~x1, 
+        y = ~x2, 
+        z = ~y,
+        text = ~rownames(d),
+        color = '#BF382A')
+fig <- fig %>% add_markers()
+fig <- fig %>% layout(title = '\n y vs. (x1, x2)', 
+                      scene = list(xaxis = list(title = 'x1'),
+                                   yaxis = list(title = 'x2'),
+                                   zaxis = list(title = 'y')))
+fig
+```
+
+
+
+
+### Ajuste del modelo 
+
+El modelo ajustado es:
+
+```{r}
+## full MLR model
+fit <- lm(y ~ ., data = d)
+summary(fit)
+```
+
+La ecuación del modelo ajustado es
+
+$$
+\hat{y} = 25.24 + 1.193 x_1 - 1.651x_2 + 1.735x_3
+$$
+
+### Inferencia para $\mathbf{\beta}$ 
+
+Los intervalos de confianza del 95% para los coeficientes pueden obtenerse a través de la función `confint.default()` haciendo
+
+```{r}
+## 95% CI para los coeficientes
+confint.default(fit)
+```
+
+
+### Multicolinealidad
+
+En términos generales, el concepto de multicolinealidad es sinómino de *redundancia* en las variables independientes. 
+
+Uno de los supuestos fuertes del modelo de RLM es que las variables $X_1, X_2,\ldots,X_n$ son independientes. Cuando esto **no** ocurre, los estimadores de ${\beta} = (\beta_1,\beta_2,\ldots,\beta_k)$ tienen propiedades distintas a las [ya](https://jivelez.github.io/book-adii/rlm.html#an%C3%A1lisis-de-multicolinealidad) conocidas. 
+
+Desde el punto de vista formal, la existencia de multicolinealidad puede probarse utilizando el _ill-condition number_ (ICN)
+
+
+```{r}
+## ICN
+kappa(fit)     
+```
+
+Teniendo en cuenta que el ICN es $>30$, aparentemente, existe multicolinealidad entre $x_1, x_2$ y $x_3$. 
+
+Ahora, si estamos interesados en determinar cuál de la(s) variable(s) independiente(s) con mayor grado de colinealidad, utilizamos el VIF:
+
+```{r}
+## VIF
+car::vif(fit)
+```
+
+Al analizar el VIF, es claro que ningún valor es $>5$. 
+
+Recientemente, se han implementado otras pruebas de multicolinealidad en el paquete `mctest`:
+
+```{r message=FALSE}
+## otras pruebas de multicolinealidad
+mctest(fit)$odiags
+```
+
+De acuerdo con estos resultados, **no es posible** hablar de la existencia de multicolinealidad. En parrticular, no aparece el valor de `1` en la columna `detection`.
+
+
+### Validación de supuestos
+
+La validación de los supuestos puede hacerse via valores $p$ como se muestra a continuación.
+
+**Normalidad**
+
+```{r}
+## prueba de Normalidad
+shapiro.test(rstudent(fit))$p.value
+```
+
+Como el valor $p$ es $>0.05$, entonces los errores del modelo siguen una distribución Normal.
+
+<br>
+
+**Varianza constante**
+
+```{r message=FALSE}
+## prueba de varianza constante
+car:::ncvTest(fit)$p
+```
+
+Como el valor $p$ es $>0.05$, podemos concluir que los errores tienen varianza constante. 
+
+<br>
+
+**Independencia**
+
+```{r}
+## prueba de independencia
+car:::durbinWatsonTest(fit)$p
+```
+
+Este resultado indica que los errores del modelo ajustado son independientes.
+
+<br>
+
+### Identificación de _outliers_
+
+Para identificar _outliers_ usamos los residuales estudentizados del modelo:
+
+```{r}
+## outliers?
+r <- rstudent(fit)
+res <- which(r > 3 | r < -3)
+nout <- ifelse(length(res) == 0, 0, length(res))
+```
+
+Este resultado indica que hay `r nout` _outliers_ en los datos.
+
+
+### Datos influenciales
+
+Para identificar este tipo de observaciones, utilizamos la [distancia de Cook](https://jivelez.github.io/book-adii/rlm.html#identificaci%C3%B3n-de-observaciones-influenciales).
+
+En `R` procedemos de la siguiente manera:
+
+```{r fig.align='center', fig.width=5, fig.height=5}
+## gráfico de la distancia de Cook
+plot(fit, which = 4, las = 1)
+```
+
+Este resultado indica que las observaciones `44`, `57` y `142` podrían considerarse _influenciales_.
+
+
+<br>
+
+Ahora, podemos encapsular las pruebas anteriores en una función:
+
+```{r}
+## cargar función
+source('https://www.dropbox.com/scl/fi/1z0gsv6g4a9eowcoqs4xf/validar_supuestos.R?rlkey=ioqrt3r3sl3vh7wa7sc82gjqh&dl=1')
+```
+
+Finalmente, utilizamos la función `validar_supuestos()` para validar _todos_ los supuestos a la vez e identificar _outliers_:
+
+```{r}
+## validar supuestos
+## fit es el objeto que contiene el modelo de RLM
+validar_supuestos(fit)
+```
+
+<br>
+
+**Conclusión:** Los supuestos de Normalidad, independencia y varianza constante de los errores se cumplen. Por lo tanto, el modelo es válido para predecir. Además, parecen no existir _outliers_ en los datos.
+
+
+### Mejora de la función `validar_supuestos()`
+
+A continuación crearemos una función más completa para la validación y construcción de un modelo de regresión lineal múltiple. En ella vamos a seguir los siguientes pasos de construcción de un modelo, ignorando el primer paso del ajuste de este.
+
+1. Ajuste
+2. Validación
+   * Prueba de significancia global
+   * Prueba de significancia marginal
+   * $R^2$ ajustado
+3. Verificación de supuestos del error
+   * Normalidad
+   * Independencia
+   * Varianza constante
+4. Multicolinealidad
+   - ICN
+   - VIF
+   - ...
+5. Outliers/Incluenciales
+   - Distancia de Cook
+   - DFBetas
+6. Inferencia
+   - Intervalo de confianza
+   - Intervalo de predicción
+   
+Veamos entonces,
+
+``` {r}
+validar_supuestos <- function(model, plot = F) {
+  s <- summary(model)
+  
+  # Validación
+  ## Prueba de significancia global
+  psg <- ifelse(
+    s$fstatistic[[1]] > 1,
+    "Significativo",
+    "No significativo"
+  )
+  ## Prueba de significancia marginal
+  psm <- ifelse(
+    any(s$coefficients[, 4] < 0.05),
+    "Significativas",
+    "No significativo"
+  )
+  ## Ajuste del modelo (R2 ajustado)
+  radj <- ifelse(
+    s$adj.r.squared > 0.75,
+    "Significativo",
+    "No significativo"
+  )
+  
+  # Verificación de supuestos del error
+  st_r <- rstudent(model)
+  ## Normalidad
+  nor <- ifelse(
+    shapiro.test(st_r)$p.value >= 0.05,
+    "Cumple",
+    "No cumple"
+  )
+  ## Independencia
+  ind <- ifelse(
+    durbinWatsonTest(fit)$p >= 0.05,
+    "Cumple",
+    "No cumple"
+  )
+  ## Homocedasticidad
+  hom <- ifelse(
+    ncvTest(fit)$p >= 0.05,
+    "Cumple",
+    "No cumple"
+  )
+  
+  # Multicolinealidad
+  mul <- ifelse(
+    any(mctest(model)$odiags[, 2] == 0),
+    "Cumple",
+    "No cumple"
+  )
+  
+  # Outliers/Influenciales
+  ## Outliers 
+  res <- which(st_r > 3 | st_r < -3)
+  nout <- ifelse(
+    length(res) == 0, 
+    "No hay outliers", 
+    length(res)
+  )
+  ## Influenciales
+  cooksd <- cooks.distance(model)
+  obs_inf <- which(cooksd > 0.05)
+  inf <- ifelse(
+    length(obs_inf) > 0,
+    paste(obs_inf, collapse = ", "),
+    "No hay influenciales"
+  )
+  
+  
+  message("Validación")
+  out_v <- c(
+    "Significancia Global" = psg,
+    "Significancia Marginal" = psm,
+    "R2 ajustado" = radj
+  )
+  print(out_v)
+  
+  out_r <- c(
+    "Normalidad" = nor,
+    "Independencia" = ind,
+    "Homocedasticidad" = hom
+  )
+  
+  message("Verificación de residuales")
+  print(out_r)
+  
+  message("")
+  print(c("Multicolinealidad" = mul))
+  if(!(mul == "Cumple")) {
+    print(c(vif(model)))
+  }
+  
+  message("Outliers/Influenciales")
+  out_oi <- c(
+    "Outliers" = nout,
+    "Influenciales" = inf
+  )
+  print(out_oi)
+  if(plot == T) {
+    plot(model, which = 4, las = 1)
+  }
+  
+}
+```
+
+Ahora, evaluemos el modelo (`fit`) utilizando la función creada
+
+``` {r}
+validar_supuestos(fit, plot = T)
+```
+
+### Predicción 
+
+Si fuese de interés determinar el rendimiento de una llanta con compuestos 
+
+$$
+\mathbf{x}_0= (10, 4, 6)
+$$ 
+
+procedemos de la siguiente forma:
+
+1. Creamos el vector de _nuevas_ condiciones:
+
+```{r}
+## x0
+x0 <- data.frame(x1 = 10, x2 = 4, x3 = 6)
+x0
+```
+
+2. Realizamos la estimación de $\hat{y}|\mathbf{x}_0$
+
+```{r}
+## estimación
+predict(fit, newdat = x0) 
+```
+
+Por lo tanto, $\widehat{E[Y|\mathbf{x}_0]} = 40.97$.
+
+3. Construimos intervalos de confianza y predicción. Para ello basta con agregar el argumento `interval` a `predict()`:
+
+El intervalo de confianza del 95% es
+
+```{r}
+## confidence interval
+predict(fit, newdat = x0, interval = 'confidence') 
+```
+
+Así las cosas, el promedio _poblacional_ de la distancia recorrida cuando se utiliza la mezcla de componentes $\mathbf{x}_0= (10, 4, 6)$ es 
+
+$$
+\mu | \mathbf{x}_0 \in (38.88, 43.06)
+$$
+con una confianza del 95%.
+
+Finalmente, el intervalo de predicción del 95% es 
+
+```{r}
+## prediction interval
+predict(fit, newdat = x0, interval = 'prediction') 
+```
+
+Por lo tanto, la distancia recorrida por el próximo _set_ de llantas en el que se utilice la mezcla  de componentes $\mathbf{x}_0= (10, 4, 6)$ será 
+
+$$
+Y | \mathbf{x}_0 \in (35.03, 46.92)
+$$
+
+Para más información sobre el cálculo de los intervalos de confianza y predicción a partir de un modelo de RLM ajustado, se recomienda consultar `?predict.lm`.
+
+
+## Referencias
+
+Para más detalles sobre el modelo de RLM se sugiere consultar el [Capítulo 3](https://jivelez.github.io/book-adii/rlm.html) del texto [_Modelos de Regresión: Una aproximación práctica con R_](https://jivelez.github.io/book-adii/).
