@@ -105,7 +105,7 @@ validar_supuestos <- function(model, plot = F) {
     "Influenciales" = inf
   )
   print(out_oi)
-  if(influencial_plot == T) {
+  if(plot) {
     plot(model, which = 4, las = 1)
   }
 }
