@@ -40,7 +40,7 @@ validar_supuestos <- function(model, plot = F) {
   )
   ## Independencia
   ind <- ifelse(
-    durbinWatsonTest(fit)$p >= 0.05,
+    car::durbinWatsonTest(fit)$p >= 0.05,
     "Cumple",
     "No cumple"
   )
